@@ -69,6 +69,7 @@ UNPAYWALL_EMAIL: str = os.getenv("UNPAYWALL_EMAIL", "")
 CROSSREF_MAILTO: str = os.getenv("CROSSREF_MAILTO", "") or UNPAYWALL_EMAIL
 CORE_API_KEY: str = os.getenv("CORE_API_KEY", "")
 NCBI_API_KEY: str = os.getenv("NCBI_API_KEY", "")
+SCOPUS_API_KEY: str = os.getenv("SCOPUS_API_KEY", "")
 
 # ---------------------------------------------------------------------------
 # Rate limits (seconds between requests)
@@ -84,6 +85,7 @@ CORE_RATE_LIMIT: float = 0.2
 EUROPE_PMC_RATE_LIMIT: float = 0.2
 SCIELO_RATE_LIMIT: float = 0.5
 DOAJ_RATE_LIMIT: float = 0.2
+SCOPUS_RATE_LIMIT: float = 0.1
 REQUEST_TIMEOUT: int = 30
 
 # ---------------------------------------------------------------------------
@@ -121,4 +123,5 @@ SOURCES_ENABLED: dict[str, bool] = {
     "europe_pmc": os.getenv("DISABLE_EUROPE_PMC", "").lower() != "true",
     "scielo": os.getenv("DISABLE_SCIELO", "").lower() != "true",
     "doaj": os.getenv("DISABLE_DOAJ", "").lower() != "true",
+    "scopus": os.getenv("DISABLE_SCOPUS", "").lower() != "true",
 }

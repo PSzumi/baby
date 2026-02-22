@@ -14,6 +14,7 @@ _SEARCH_MODULES = [
     "europe_pmc",
     "scielo",
     "doaj",
+    "scopus",
 ]
 
 
