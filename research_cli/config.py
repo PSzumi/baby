@@ -114,6 +114,21 @@ USER_AGENT: str = "research-cli/2.0 (academic-automation; mailto:{})".format(
 # Source enable/disable (set DISABLE_<SOURCE>=true to skip)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Thesis / USIL defaults
+# ---------------------------------------------------------------------------
+
+DEFAULT_LANGUAGE = "es"
+DEFAULT_METHODOLOGY = {
+    "type": "cuantitativa",
+    "scope": "correlacional",
+    "design": "no experimental, transversal",
+}
+
+# ---------------------------------------------------------------------------
+# Source enable/disable (set DISABLE_<SOURCE>=true to skip)
+# ---------------------------------------------------------------------------
+
 SOURCES_ENABLED: dict[str, bool] = {
     "semantic_scholar": os.getenv("DISABLE_SEMANTIC_SCHOLAR", "").lower() != "true",
     "openalex": os.getenv("DISABLE_OPENALEX", "").lower() != "true",

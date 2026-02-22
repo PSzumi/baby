@@ -50,17 +50,25 @@ def check_section_word_counts(project_name: str) -> list[str]:
     sections = get_sections(project_name, version)
     warnings = []
 
+    from research_cli.generation.formulaic import is_formulaic
+    from research_cli.generation.antecedentes import is_antecedentes
+    from research_cli.generation.marco_teorico import is_marco_teorico
+    from research_cli.generation.methodology import is_methodology_boilerplate
+    from research_cli.generation.matriz import is_matriz
+
     for section in sections:
         key = section.get("section_key", "")
-        if key == "references":
+        if key == "references" or is_formulaic(key) or is_antecedentes(key) or is_marco_teorico(key) or is_methodology_boilerplate(key) or is_matriz(key):
             continue
         wc = section.get("word_count", 0)
         title = section.get("section_title", key)
 
         if wc < 150:
-            warnings.append(f"Section '{title}' is thin ({wc} words)")
+            warnings.append(f"[CRITICAL] Section '{title}' is critically short ({wc} words)")
+        elif wc < 400:
+            warnings.append(f"[WARN] Section '{title}' is short ({wc} words, target ~800)")
         elif wc > 2000:
-            warnings.append(f"Section '{title}' may be too long ({wc} words)")
+            warnings.append(f"[WARN] Section '{title}' may be too long ({wc} words)")
 
     return warnings
 

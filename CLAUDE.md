@@ -20,6 +20,7 @@ research_cli/
     europe_pmc.py      — resulttype must be lowercase, uses cursorMark pagination
     scielo.py          — HTML scraping (no public JSON API), fragile
     doaj.py            — v4 API, bibjson response structure
+    scopus.py          — Elsevier API, free tier: no abstracts, uses DOI merge
     crossref.py        — Bibliographic enrichment (not search)
     unpaywall.py       — PDF URL finder (not search)
   commands/
@@ -54,3 +55,4 @@ research_cli/
 - CORE requires free API key (https://core.ac.uk/services/api)
 - Semantic Scholar rate-limits aggressively without API key (429s common)
 - Europe PMC: `resulttype` param must be lowercase (not camelCase)
+- Scopus free tier returns no abstracts — relies on DOI-based merge with other sources

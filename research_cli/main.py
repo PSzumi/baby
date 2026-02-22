@@ -28,10 +28,28 @@ def init(
     project_name: str = typer.Argument(..., help="Name for the new research project."),
     context: str = typer.Option("", "--context", "-c", help="Academic discipline."),
     location: str = typer.Option("", "--location", "-l", help="Geographic focus."),
+    language: str = typer.Option("", "--language", "--lang", help="Language: es or en (default: es)."),
+    university: str = typer.Option("", "--university", "-u", help="University name."),
+    career: str = typer.Option("", "--career", help="Career / academic program."),
+    variable1: str = typer.Option("", "--var1", help="Variable 1 name."),
+    variable2: str = typer.Option("", "--var2", help="Variable 2 name."),
+    population: str = typer.Option("", "--population", "-p", help="Population description."),
+    sample_size: int = typer.Option(0, "--sample-size", "-n", help="Sample size (0 = not set)."),
 ) -> None:
     """Phase 1: Create a project and generate thesis topics."""
     from research_cli.commands.init_cmd import run
-    run(project_name, context=context, location=location)
+    run(
+        project_name,
+        context=context,
+        location=location,
+        language=language,
+        university=university,
+        career=career,
+        variable1=variable1,
+        variable2=variable2,
+        population=population,
+        sample_size=sample_size,
+    )
 
 
 # ── Phase 2: fetch-data ───────────────────────────────────────────────
@@ -108,6 +126,17 @@ def revise(
     run(project_name, feedback_path=feedback, apply_revisions=apply)
 
 
+# ── Export: DOCX ──────────────────────────────────────────────────────
+
+@app.command()
+def export(
+    project_name: str = typer.Argument(..., help="Existing project name."),
+) -> None:
+    """Export thesis draft to USIL-formatted .docx (Times New Roman, headings, tables)."""
+    from research_cli.commands.export_cmd import run
+    run(project_name)
+
+
 # ── Status utility ────────────────────────────────────────────────────
 
 @app.command()
@@ -152,7 +181,7 @@ def status(
 
     # Check for output files
     output_dir = os.path.join("projects", project_name, "outputs", f"v{version}")
-    for fname in ("scaffold.md", "final_draft.md", "presentation_guide.md", "revision_plan.md"):
+    for fname in ("scaffold.md", "final_draft.md", "thesis.docx", "presentation_guide.md", "revision_plan.md"):
         fpath = os.path.join(output_dir, fname)
         exists = "[green]Yes[/green]" if os.path.isfile(fpath) else "[dim]No[/dim]"
         table.add_row(f"  {fname}", exists)

@@ -43,6 +43,28 @@ def get_connection(project_name: str) -> sqlite3.Connection:
     return conn
 
 
+def _migrate_db(conn: sqlite3.Connection) -> None:
+    """Add new columns to project_meta if they don't exist (cheap on every call)."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(project_meta)")}
+    new_cols = {
+        "language": "TEXT DEFAULT 'es'",
+        "university": "TEXT DEFAULT ''",
+        "career": "TEXT DEFAULT ''",
+        "variable_1": "TEXT DEFAULT ''",
+        "variable_2": "TEXT DEFAULT ''",
+        "population": "TEXT DEFAULT ''",
+        "sample_size": "INTEGER DEFAULT 0",
+        "methodology": "TEXT DEFAULT ''",
+    }
+    added = False
+    for col, typedef in new_cols.items():
+        if col not in existing:
+            conn.execute(f"ALTER TABLE project_meta ADD COLUMN {col} {typedef}")
+            added = True
+    if added:
+        conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Schema
 # ---------------------------------------------------------------------------
@@ -56,7 +78,15 @@ CREATE TABLE IF NOT EXISTS project_meta (
     phase           TEXT DEFAULT 'init',
     current_version INTEGER DEFAULT 1,
     created_at      TEXT,
-    updated_at      TEXT
+    updated_at      TEXT,
+    language        TEXT DEFAULT 'es',
+    university      TEXT DEFAULT '',
+    career          TEXT DEFAULT '',
+    variable_1      TEXT DEFAULT '',
+    variable_2      TEXT DEFAULT '',
+    population      TEXT DEFAULT '',
+    sample_size     INTEGER DEFAULT 0,
+    methodology     TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS sources (
@@ -140,6 +170,7 @@ def init_db(project_name: str) -> None:
     conn = get_connection(project_name)
     conn.executescript(_SCHEMA)
     conn.commit()
+    _migrate_db(conn)  # add new columns to existing DBs
     conn.close()
 
 
@@ -147,19 +178,48 @@ def init_db(project_name: str) -> None:
 # Project metadata
 # ---------------------------------------------------------------------------
 
-def save_topic(project_name: str, topic: str, context: str = "", location: str = "") -> None:
+def save_project_meta(
+    project_name: str,
+    topic: str,
+    context: str = "",
+    location: str = "",
+    language: str = "es",
+    university: str = "",
+    career: str = "",
+    variable_1: str = "",
+    variable_2: str = "",
+    population: str = "",
+    sample_size: int = 0,
+    methodology: str = "",
+) -> None:
+    """Save all project metadata (full USIL thesis fields)."""
     conn = get_connection(project_name)
+    _migrate_db(conn)
     now = _now()
     conn.execute(
-        """INSERT INTO project_meta (id, topic, context, location, created_at, updated_at)
-           VALUES (1, ?, ?, ?, ?, ?)
+        """INSERT INTO project_meta
+               (id, topic, context, location, language, university, career,
+                variable_1, variable_2, population, sample_size, methodology,
+                created_at, updated_at)
+           VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
                topic = excluded.topic, context = excluded.context,
-               location = excluded.location, updated_at = ?""",
-        (topic, context, location, now, now, now),
+               location = excluded.location, language = excluded.language,
+               university = excluded.university, career = excluded.career,
+               variable_1 = excluded.variable_1, variable_2 = excluded.variable_2,
+               population = excluded.population, sample_size = excluded.sample_size,
+               methodology = excluded.methodology, updated_at = ?""",
+        (topic, context, location, language, university, career,
+         variable_1, variable_2, population, sample_size, methodology,
+         now, now, now),
     )
     conn.commit()
     conn.close()
+
+
+def save_topic(project_name: str, topic: str, context: str = "", location: str = "") -> None:
+    """Backward-compatible wrapper — saves only topic/context/location."""
+    save_project_meta(project_name, topic, context=context, location=location)
 
 
 def get_topic(project_name: str) -> Optional[str]:
@@ -171,6 +231,7 @@ def get_topic(project_name: str) -> Optional[str]:
 
 def get_meta(project_name: str) -> Optional[dict]:
     conn = get_connection(project_name)
+    _migrate_db(conn)
     row = conn.execute("SELECT * FROM project_meta WHERE id = 1").fetchone()
     conn.close()
     return dict(row) if row else None

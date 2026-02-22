@@ -25,7 +25,7 @@ from research_cli.database import (
     update_phase,
 )
 from research_cli.sources import get_search_sources
-from research_cli.sources.unpaywall import find_pdf as unpaywall_find
+from research_cli.sources.unpaywall import batch_find_pdfs as unpaywall_batch
 from research_cli.sources.arxiv import try_download as arxiv_download
 from research_cli.content.deduplicator import deduplicate
 from research_cli.content.relevance_scorer import score_sources
@@ -183,6 +183,21 @@ def run(
 
     project_dir = os.path.join("projects", project_name)
 
+    # ── Stats tracking ──────────────────────────────────────────────
+    stats = {
+        "source_errors": [],           # (source_name, query, error_msg)
+        "papers_discovered": 0,
+        "papers_after_dedup": 0,
+        "bib_entries": 0,
+        "unpaywall_found": 0,
+        "unpaywall_total": 0,
+        "pdf_downloads_attempted": 0,
+        "pdf_downloads_succeeded": 0,
+        "pdf_downloads_failed": 0,
+        "fulltext_extracted": 0,
+        "sources_scored": 0,
+    }
+
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -217,15 +232,19 @@ def run(
                             wait = (attempt + 1) * 10
                             console.print(f"  [dim]SS rate limited, waiting {wait}s...[/dim]")
                             time.sleep(wait)
+                    else:
+                        stats["source_errors"].append((source_name, q, "rate limited after 3 attempts"))
                 else:
                     try:
                         results = search_fn(q, limit=per_query_limit)
                         all_papers.extend(results)
                     except Exception as exc:
                         console.print(f"  [dim][SKIP] {source_name}: {exc}[/dim]")
+                        stats["source_errors"].append((source_name, q, str(exc)))
 
             time.sleep(1)  # brief pause between queries
 
+        stats["papers_discovered"] = len(all_papers)
         progress.update(task, description=f"Stage 1: Found {len(all_papers)} papers")
         progress.update(task, completed=True)
 
@@ -241,6 +260,7 @@ def run(
         if len(deduped) > max_sources:
             deduped = _select_diverse(deduped, max_sources)
 
+        stats["papers_after_dedup"] = len(deduped)
         progress.update(task, description=f"Stage 2: {len(deduped)} unique papers")
         progress.update(task, completed=True)
 
@@ -251,6 +271,7 @@ def run(
         task = progress.add_task("Stage 3: Enriching bibliography (CrossRef)...", total=None)
 
         bib_count = build_bibliography(project_name)
+        stats["bib_entries"] = bib_count
 
         progress.update(task, description=f"Stage 3: {bib_count} bibliography entries")
         progress.update(task, completed=True)
@@ -264,6 +285,28 @@ def run(
             fulltext_dir = os.path.join(project_dir, "sources", "fulltext")
             pdf_count = 0
 
+            # Batch Unpaywall lookup for all DOIs missing pdf_url
+            if email:
+                dois_needing_urls = [
+                    s["doi"] for s in sources
+                    if s.get("doi") and not s.get("pdf_url") and not s.get("full_text_path")
+                ]
+                if dois_needing_urls:
+                    stats["unpaywall_total"] = len(dois_needing_urls)
+                    unpaywall_results = unpaywall_batch(dois_needing_urls)
+                    stats["unpaywall_found"] = len(unpaywall_results)
+                    # Update pdf_url for matched sources
+                    doi_to_sid = {s["doi"]: s["id"] for s in sources if s.get("doi")}
+                    for doi, pdf_url in unpaywall_results.items():
+                        sid = doi_to_sid.get(doi)
+                        if sid:
+                            update_source_field(project_name, sid, "pdf_url", pdf_url)
+                            # Also update in-memory list
+                            for s in sources:
+                                if s.get("doi") == doi:
+                                    s["pdf_url"] = pdf_url
+                                    break
+
             for source in sources:
                 doi = source.get("doi", "")
                 url = source.get("url", "")
@@ -274,13 +317,6 @@ def run(
                     continue
 
                 pdf_url = source.get("pdf_url", "")
-
-                # Try Unpaywall
-                if not pdf_url and email:
-                    found = unpaywall_find(doi)
-                    if found:
-                        pdf_url = found
-                        update_source_field(project_name, sid, "pdf_url", pdf_url)
 
                 # Try arXiv
                 if not pdf_url:
@@ -295,10 +331,12 @@ def run(
                                 f.write(text)
                             update_source_field(project_name, sid, "full_text_path", ft_path)
                             pdf_count += 1
+                            stats["fulltext_extracted"] += 1
                         continue
 
                 # Download PDF from URL
                 if pdf_url:
+                    stats["pdf_downloads_attempted"] += 1
                     filename = f"{sid}.pdf"
                     pdf_path, text = download_and_extract(pdf_url, pdf_dir, filename)
                     if text:
@@ -308,6 +346,10 @@ def run(
                             f.write(text)
                         update_source_field(project_name, sid, "full_text_path", ft_path)
                         pdf_count += 1
+                        stats["pdf_downloads_succeeded"] += 1
+                        stats["fulltext_extracted"] += 1
+                    else:
+                        stats["pdf_downloads_failed"] += 1
 
             progress.update(task, description=f"Stage 4: {pdf_count} full-text papers")
             progress.update(task, completed=True)
@@ -327,6 +369,7 @@ def run(
                 s.get("quality_score", 0),
             )
 
+        stats["sources_scored"] = len(scored)
         progress.update(task, description=f"Stage 5: Scored {len(scored)} sources")
         progress.update(task, completed=True)
 
@@ -339,12 +382,36 @@ def run(
 
     update_phase(project_name, "fetch-data")
 
-    # Summary
+    # ── Summary Report ──────────────────────────────────────────────
     final_sources = get_all_sources(project_name)
     ft_count = sum(1 for s in final_sources if s.get("full_text_path"))
 
-    console.print(f"\n[bold green]Done![/bold green]")
-    console.print(f"  Total sources: {len(final_sources)}")
-    console.print(f"  With full text: {ft_count}")
-    console.print(f"  Bibliography entries: {bib_count}")
+    from rich.panel import Panel
+    from rich.table import Table
+
+    summary = Table(show_header=False, box=None, padding=(0, 2))
+    summary.add_column("label", style="bold")
+    summary.add_column("value")
+
+    summary.add_row("Papers discovered", str(stats["papers_discovered"]))
+    summary.add_row("After dedup", str(stats["papers_after_dedup"]))
+    summary.add_row("Bibliography entries", str(stats["bib_entries"]))
+
+    if not skip_fulltext:
+        summary.add_row("Unpaywall hits", f"{stats['unpaywall_found']}/{stats['unpaywall_total']}")
+        summary.add_row("PDF downloads", f"{stats['pdf_downloads_succeeded']}/{stats['pdf_downloads_attempted']} succeeded, {stats['pdf_downloads_failed']} failed")
+        summary.add_row("Full text extracted", str(ft_count))
+
+    summary.add_row("Sources scored", str(stats["sources_scored"]))
+
+    if stats["source_errors"]:
+        # Group errors by source
+        error_counts: dict[str, int] = {}
+        for src, _q, _msg in stats["source_errors"]:
+            error_counts[src] = error_counts.get(src, 0) + 1
+        error_summary = ", ".join(f"{src}: {cnt}" for src, cnt in sorted(error_counts.items()))
+        summary.add_row("Source errors", f"{len(stats['source_errors'])} ({error_summary})")
+
+    console.print()
+    console.print(Panel(summary, title="[bold green]Fetch Complete[/bold green]", border_style="green"))
     console.print(f"\n[dim]Next: research-cli review {project_name}[/dim]")

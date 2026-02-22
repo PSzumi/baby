@@ -25,15 +25,71 @@ from research_cli.database import (
 )
 
 
-def _get_previous_section_tail(sections: list[dict], current_index: int, chars: int = 1500) -> str:
-    """Get the last ~chars characters of the previous section for transition coherence."""
+def _expand_short_section(
+    draft: str,
+    topic: str,
+    section_title: str,
+    target_words: int,
+    current_words: int,
+) -> str:
+    """Ask LLM to expand a short section while preserving existing content and citations."""
+    prompt = f"""The following thesis section is too short ({current_words} words, target: {target_words}).
+Expand it to approximately {target_words} words while:
+1. Keeping ALL existing content and citations intact — do not remove or change any citation strings.
+2. Adding more analysis, explanation, and connections between ideas.
+3. Elaborating on key points with more detail from the cited sources.
+4. Maintaining formal, third-person academic prose.
+5. Including the section heading as a markdown header.
+
+**Topic:** {topic}
+**Section:** {section_title}
+
+**Current draft to expand:**
+{draft}
+"""
+    return call_claude(prompt, max_tokens=4096, temperature=0.3)
+
+
+def _get_previous_section_context(sections: list[dict], current_index: int) -> dict:
+    """Get structured context from the previous section for transition coherence.
+
+    Returns dict with:
+        title: previous section title
+        opening: first non-heading paragraph (up to 500 chars)
+        closing: last 1500 chars of the section
+    """
     if current_index <= 0:
-        return ""
+        return {}
     prev = sections[current_index - 1]
     draft = prev.get("draft_content", "")
     if not draft:
+        return {}
+
+    title = prev.get("section_title", "")
+    lines = draft.split("\n")
+
+    # Find first non-heading, non-empty paragraph
+    opening = ""
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            opening = stripped[:500]
+            break
+
+    return {
+        "title": title,
+        "opening": opening,
+        "closing": draft[-1500:],
+    }
+
+
+def _build_research_context(meta: dict | None) -> str:
+    """Build a research context block for section writing prompts."""
+    if not meta:
         return ""
-    return draft[-chars:]
+    from research_cli.generation.planner import _build_metadata_block
+    block = _build_metadata_block(meta)
+    return f"\n{block}\n" if block else ""
 
 
 def write_section(
@@ -41,7 +97,8 @@ def write_section(
     section: dict,
     sources: list[dict],
     citation_map: dict[int, str],
-    previous_tail: str = "",
+    previous_context: dict | None = None,
+    meta: dict | None = None,
 ) -> str:
     """
     Generate prose for a single thesis section.
@@ -56,8 +113,10 @@ def write_section(
         Sources assigned to this section (from source_sections table).
     citation_map : dict[int, str]
         Mapping of source_id -> inline citation string.
-    previous_tail : str
-        Last ~500 words of the previous section for transitions.
+    previous_context : dict or None
+        Structured context from previous section (title, opening, closing).
+    meta : dict or None
+        Project metadata (variables, methodology, population).
 
     Returns
     -------
@@ -118,19 +177,33 @@ def write_section(
 
     # Build transition context
     transition_note = ""
-    if previous_tail:
+    if previous_context:
+        prev_title = previous_context.get("title", "")
+        prev_opening = previous_context.get("opening", "")
+        prev_closing = previous_context.get("closing", "")
         transition_note = f"""
-**Previous section ended with:**
-...{previous_tail}
+**Previous section:** {prev_title}
+**Previous section opened with:** {prev_opening}
+**Previous section ended with:** ...{prev_closing}
 
-Ensure a smooth transition from the previous section.
+TRANSITION REQUIREMENT: Your opening paragraph MUST connect to the previous section's content.
+Use transitional phrases such as "Building on the ... discussed above", "Having established ..., this section turns to",
+"While the previous section examined ..., the focus now shifts to", etc.
+Do NOT repeat content from the previous section — only reference it to create a bridge.
 """
+
+    # Build research context from metadata
+    research_context = _build_research_context(meta)
+
+    # Language instruction
+    lang = (meta or {}).get("language", "en")
+    lang_rule = "\n9. Write ALL prose in Spanish." if lang == "es" else ""
 
     prompt = f"""Write the following section of an academic thesis paper.
 
 **Topic:** {topic}
 **Section:** {section_title}
-
+{research_context}
 **Scaffold / Key Points:**
 {scaffold_text}
 
@@ -150,7 +223,7 @@ Ensure a smooth transition from the previous section.
 6. If the sources are insufficient for a point, write:
    "[Further research is needed to establish...]"
 7. Include the section heading as a markdown header.
-8. Write substantive paragraphs, not bullet points.
+8. Write substantive paragraphs, not bullet points.{lang_rule}
 """
 
     result = call_claude(prompt, max_tokens=4096, temperature=0.3)
@@ -161,6 +234,7 @@ def write_all_sections(
     project_name: str,
     topic: str,
     citation_map: dict[int, str],
+    meta: dict | None = None,
 ) -> str:
     """
     Orchestrate writing all sections in order.
@@ -190,20 +264,59 @@ def write_all_sections(
 
         print(f"  [{i+1}/{len(sections)}] Writing: {section.get('section_title', '')}...")
 
-        # Get sources assigned to this section
-        sources = get_sources_for_section(project_name, section_key)
+        # Formulaic sections bypass the LLM entirely
+        from research_cli.generation.formulaic import is_formulaic, generate_formulaic
+        from research_cli.generation.antecedentes import is_antecedentes, generate_antecedentes
+        from research_cli.generation.marco_teorico import is_marco_teorico, generate_marco_teorico
+        from research_cli.generation.methodology import is_methodology_boilerplate, generate_methodology
+        from research_cli.generation.matriz import is_matriz, generate_matriz
 
-        # Get previous section tail for coherence
-        prev_tail = _get_previous_section_tail(written_sections, len(written_sections))
+        if is_formulaic(section_key):
+            draft = generate_formulaic(section_key, topic, meta)
+            print(f"    Generated formulaically ({len(draft.split())} words)")
+        elif is_antecedentes(section_key):
+            sources = get_sources_for_section(project_name, section_key)
+            draft = generate_antecedentes(section_key, topic, meta or {}, sources, citation_map)
+            print(f"    Generated antecedentes ({len(draft.split())} words, {len(sources)} sources)")
+        elif is_marco_teorico(section_key):
+            sources = get_sources_for_section(project_name, section_key)
+            draft = generate_marco_teorico(section_key, topic, meta or {}, sources, citation_map)
+            print(f"    Generated marco teórico ({len(draft.split())} words, {len(sources)} sources)")
+        elif is_methodology_boilerplate(section_key):
+            sources = get_sources_for_section(project_name, section_key)
+            draft = generate_methodology(section_key, topic, meta or {}, sources, citation_map)
+            print(f"    Generated methodology ({len(draft.split())} words)")
+        elif is_matriz(section_key):
+            draft = generate_matriz(section_key, topic, meta or {})
+            print(f"    Generated matriz de consistencia")
+        else:
+            # Get sources assigned to this section
+            sources = get_sources_for_section(project_name, section_key)
 
-        # Generate the section
-        draft = write_section(
-            topic=topic,
-            section=section,
-            sources=sources,
-            citation_map=citation_map,
-            previous_tail=prev_tail,
-        )
+            # Get previous section context for coherence
+            prev_context = _get_previous_section_context(written_sections, len(written_sections))
+
+            # Generate the section
+            draft = write_section(
+                topic=topic,
+                section=section,
+                sources=sources,
+                citation_map=citation_map,
+                previous_context=prev_context,
+                meta=meta,
+            )
+
+            # Check word count — expand if too short
+            word_count = len(draft.split())
+            if word_count < 400:
+                print(f"    Section too short ({word_count} words), expanding...")
+                time.sleep(15)  # rate limit pause
+                draft = _expand_short_section(
+                    draft, topic, section.get("section_title", ""),
+                    target_words=800, current_words=word_count,
+                )
+                new_wc = len(draft.split())
+                print(f"    Expanded: {word_count} → {new_wc} words")
 
         # Validate citations in this section
         report = validate_draft(draft, bib_entries)

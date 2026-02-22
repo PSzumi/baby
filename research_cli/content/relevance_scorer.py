@@ -75,6 +75,7 @@ Example: {{"0": 8, "1": 3, "2": 9}}
         return {int(k): float(v) / 10.0 for k, v in scores.items()}
     except (ValueError, KeyError, TypeError):
         # Default to moderate relevance on failure
+        print(f"  [WARN] LLM relevance scoring failed for batch of {len(papers)} papers — using 0.5 defaults")
         return {i: 0.5 for i in range(len(papers))}
 
 

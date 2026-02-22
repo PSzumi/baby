@@ -16,6 +16,7 @@ from rich.console import Console
 
 from research_cli.database import (
     get_topic,
+    get_meta,
     get_current_version,
     update_phase,
 )
@@ -29,7 +30,8 @@ console = Console()
 def run(project_name: str) -> None:
     """Execute the draft phase."""
 
-    topic = get_topic(project_name)
+    meta = get_meta(project_name)
+    topic = meta.get("topic") if meta else get_topic(project_name)
     if not topic:
         console.print("[red]No topic found. Run 'research-cli init' first.[/red]")
         raise SystemExit(1)
@@ -45,7 +47,7 @@ def run(project_name: str) -> None:
 
     # Write all sections
     console.print("[bold]Writing sections...[/bold]")
-    draft_body = write_all_sections(project_name, topic, citation_map)
+    draft_body = write_all_sections(project_name, topic, citation_map, meta=meta)
 
     # Post-process
     console.print("\n[bold]Running quality checks...[/bold]")

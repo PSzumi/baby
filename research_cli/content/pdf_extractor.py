@@ -9,15 +9,18 @@ Extracted text is cleaned: headers/footers stripped, whitespace normalized.
 
 import os
 import re
+import time
 
 import requests
 
 from research_cli.config import REQUEST_TIMEOUT, USER_AGENT
 
+_RETRY_DELAYS = [2, 8, 30]
 
-def download_pdf(url: str, dest_path: str) -> bool:
+
+def download_pdf(url: str, dest_path: str, max_retries: int = 3) -> bool:
     """
-    Download a PDF from a URL to dest_path.
+    Download a PDF from a URL to dest_path with retry on transient errors.
     Returns True on success, False on failure.
     """
     if os.path.isfile(dest_path):
@@ -25,37 +28,40 @@ def download_pdf(url: str, dest_path: str) -> bool:
 
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
 
-    try:
-        resp = requests.get(
-            url,
-            headers={"User-Agent": USER_AGENT},
-            timeout=REQUEST_TIMEOUT * 2,
-            stream=True,
-        )
-        resp.raise_for_status()
+    for attempt in range(max_retries):
+        try:
+            resp = requests.get(
+                url,
+                headers={"User-Agent": USER_AGENT},
+                timeout=REQUEST_TIMEOUT * 2,
+                stream=True,
+            )
+            resp.raise_for_status()
 
-        # Verify it looks like a PDF
-        content_type = resp.headers.get("Content-Type", "")
-        first_bytes = b""
+            first_bytes = b""
 
-        with open(dest_path, "wb") as f:
-            for i, chunk in enumerate(resp.iter_content(chunk_size=8192)):
-                if i == 0:
-                    first_bytes = chunk[:5]
-                f.write(chunk)
+            with open(dest_path, "wb") as f:
+                for i, chunk in enumerate(resp.iter_content(chunk_size=8192)):
+                    if i == 0:
+                        first_bytes = chunk[:5]
+                    f.write(chunk)
 
-        # Check if it's actually a PDF
-        if not first_bytes.startswith(b"%PDF"):
-            os.remove(dest_path)
-            return False
+            # Non-PDF response (HTML error page etc.) — no retry
+            if not first_bytes.startswith(b"%PDF"):
+                if os.path.isfile(dest_path):
+                    os.remove(dest_path)
+                return False
 
-        return True
+            return True
 
-    except (requests.RequestException, OSError):
-        # Clean up partial downloads
-        if os.path.isfile(dest_path):
-            os.remove(dest_path)
-        return False
+        except (requests.RequestException, OSError):
+            # Clean up partial download before retry
+            if os.path.isfile(dest_path):
+                os.remove(dest_path)
+            if attempt < max_retries - 1:
+                time.sleep(_RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)])
+
+    return False
 
 
 def extract_text_pymupdf(pdf_path: str) -> str | None:
