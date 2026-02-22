@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "research-cli"
+version = "2.0.0"
+description = "Automated academic thesis generation from real research data"
+requires-python = ">=3.10"
+dependencies = [
+    "typer[all]>=0.9.0",
+    "anthropic>=0.39.0",
+    "openai>=1.0.0",
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.0.0",
+    "PyMuPDF>=1.23.0",
+    "pdfplumber>=0.10.0",
+    "lxml>=4.9.0",
+]
+
+[project.scripts]
+research-cli = "research_cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["research_cli*"]
