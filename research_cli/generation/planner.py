@@ -80,43 +80,111 @@ def get_usil_outline(meta: dict | None = None) -> str:
     var1_name = var1.get("name") or "Variable 1"
     var2_name = var2.get("name") or "Variable 2"
 
-    return f"""Capítulo I: Planteamiento del Problema
-  1.1 Descripción de la situación problemática
-  1.2 Formulación del problema
-    1.2.1 Problema general
-    1.2.2 Problemas específicos
-  1.3 Objetivos de la investigación
-    1.3.1 Objetivo general
-    1.3.2 Objetivos específicos
-  1.4 Justificación de la investigación
-  1.5 Hipótesis
-    1.5.1 Hipótesis general
-    1.5.2 Hipótesis específicas
+    return f"""Dedicatoria
+Agradecimiento
+Resumen
+Abstract
+Introducción
+Capítulo 1
+  1.1. Problema de Investigación
+    1.1.1. Planteamiento del Problema
+    1.1.2. Formulación del Problema
+    1.1.3. Justificación de la Investigación
+  1.2. Marco Referencial
+    1.2.1. Antecedentes (internacionales + nacionales)
+    1.2.2. Marco Teórico
+      1.2.2.1. {var1_name}
+      1.2.2.2. {var2_name}
+  1.3. Objetivos e Hipótesis
+    1.3.1. Objetivos
+    1.3.2. Hipótesis
+Capítulo 2
+  2.1. Método
+    2.1.1. Tipo de Investigación
+    2.1.2. Diseño de Investigación
+    2.1.3. Variables
+    2.1.4. Muestra
+    2.1.5. Instrumentos de Investigación
+    2.1.6. Procedimientos de Recolección de Datos
+Capítulo 3
+  3.1. Resultados
+    3.1.1. Presentación de Resultados
+    3.1.2. Discusión
+    3.1.3. Conclusiones
+    3.1.4. Recomendaciones
+Referencias Bibliográficas
+Anexos"""
 
-Capítulo II: Marco Teórico
-  2.1 Antecedentes de la investigación
-    2.1.1 Antecedentes internacionales
-    2.1.2 Antecedentes nacionales
-  2.2 Bases teóricas
-    2.2.1 {var1_name}
-    2.2.2 {var2_name}
-  2.3 Definición de términos básicos
 
-Capítulo III: Metodología
-  3.1 Tipo y diseño de investigación
-  3.2 Población y muestra
-  3.3 Operacionalización de variables
-  3.4 Técnicas e instrumentos de recolección de datos
-  3.5 Procedimiento de recolección de datos
-  3.6 Métodos de análisis de datos
+# ---------------------------------------------------------------------------
+# Canonical section ordering — guarantees correct USIL structure regardless
+# of what order_index the LLM assigns.
+# ---------------------------------------------------------------------------
 
-Capítulo IV: Resultados y Discusión
-  4.1 Resultados
-  4.2 Discusión de resultados
+CANONICAL_ORDER: dict[str, int] = {
+    "front_dedicatoria": 0,
+    "front_agradecimiento": 1,
+    "front_resumen": 2,
+    "front_abstract": 3,
+    "introduccion": 4,
+    "planteamiento_problema": 5,
+    "problem_formulation": 6,
+    "justificacion": 7,
+    "antecedentes_internacionales": 8,
+    "antecedentes_nacionales": 9,
+    "bases_teoricas_v1": 10,
+    "bases_teoricas_v2": 11,
+    "research_objectives": 12,
+    "hypothesis": 13,
+    "tipo_investigacion": 14,
+    "diseno_investigacion": 15,
+    "variables_def": 16,
+    "muestra": 17,
+    "instrumentos_investigacion": 18,
+    "procedimiento_recoleccion": 19,
+    "resultados_placeholder": 20,
+    "discusion_placeholder": 21,
+    "conclusiones_placeholder": 22,
+    "recomendaciones_placeholder": 23,
+    "references": 24,
+    "matriz_consistencia": 25,
+}
 
-Conclusiones y Recomendaciones
 
-Referencias"""
+# ---------------------------------------------------------------------------
+# Heading number prefixes — applied during draft assembly to produce
+# USIL-compliant numbered headings (e.g. "## 1.1.1. Planteamiento del Problema").
+# Keys with empty strings get no prefix (front matter, references, etc.).
+# ---------------------------------------------------------------------------
+
+HEADING_NUMBERS: dict[str, str] = {
+    "front_dedicatoria": "",
+    "front_agradecimiento": "",
+    "front_resumen": "",
+    "front_abstract": "",
+    "introduccion": "",
+    "planteamiento_problema": "1.1.1.",
+    "problem_formulation": "1.1.2.",
+    "justificacion": "1.1.3.",
+    "antecedentes_internacionales": "1.2.1.",
+    "antecedentes_nacionales": "1.2.1.",
+    "bases_teoricas_v1": "1.2.2.",
+    "bases_teoricas_v2": "1.2.2.",
+    "research_objectives": "1.3.1.",
+    "hypothesis": "1.3.2.",
+    "tipo_investigacion": "2.1.1.",
+    "diseno_investigacion": "2.1.2.",
+    "variables_def": "2.1.3.",
+    "muestra": "2.1.4.",
+    "instrumentos_investigacion": "2.1.5.",
+    "procedimiento_recoleccion": "2.1.6.",
+    "resultados_placeholder": "3.1.1.",
+    "discusion_placeholder": "3.1.2.",
+    "conclusiones_placeholder": "3.1.3.",
+    "recomendaciones_placeholder": "3.1.4.",
+    "references": "",
+    "matriz_consistencia": "",
+}
 
 
 # Default academic outline used when no template is provided
@@ -198,14 +266,17 @@ def plan_sections(
     location = (meta or {}).get("location", "Peru")
     if lang == "es":
         usil_keys = f"""
-- Use these EXACT section_keys for USIL sections:
-  "problem_formulation" for Formulación del problema
-  "research_objectives" for Objetivos de la investigación
-  "hypothesis" for Hipótesis
-  "methodology_type_design" for Tipo y diseño de investigación
-  "population_sample" for Población y muestra
-  "variable_operationalization" for Operacionalización de variables
-- These formulaic sections need empty source_ids arrays (they are generated formulaically).
+- Use these EXACT section_keys for front matter sections (empty source_ids):
+  "front_dedicatoria" for Dedicatoria
+  "front_agradecimiento" for Agradecimiento
+  "front_resumen" for Resumen
+  "front_abstract" for Abstract
+- Use this EXACT section_key for the introduction (5-8 source_ids):
+  "introduccion" for Introducción
+- Use these EXACT section_keys for Problema de Investigación:
+  "planteamiento_problema" for 1.1.1 Planteamiento del Problema (5-8 source_ids)
+  "problem_formulation" for 1.1.2 Formulación del Problema (empty source_ids — formulaic)
+  "justificacion" for 1.1.3 Justificación de la Investigación (3-5 source_ids)
 - Use these EXACT section_keys for antecedentes sections:
   "antecedentes_internacionales" for Antecedentes internacionales
   "antecedentes_nacionales" for Antecedentes nacionales
@@ -216,13 +287,22 @@ def plan_sections(
 - Use these EXACT section_keys for marco teórico sections:
   "bases_teoricas_v1" for Bases teóricas of Variable 1
   "bases_teoricas_v2" for Bases teóricas of Variable 2
-  "definicion_terminos" for Definición de términos básicos
 - These sections need 5-8 source_ids each (sources most relevant to the variable's conceptualization).
-- Use these EXACT section_keys for methodology boilerplate sections:
-  "tecnicas_instrumentos" for Técnicas e instrumentos de recolección de datos
-  "procedimiento_recoleccion" for Procedimiento de recolección de datos
-  "metodos_analisis" for Métodos de análisis de datos
-- These methodology sections need empty source_ids arrays (they are generated from templates).
+- Use these EXACT section_keys for formulaic sections (empty source_ids):
+  "research_objectives" for 1.3.1 Objetivos
+  "hypothesis" for 1.3.2 Hipótesis
+  "tipo_investigacion" for 2.1.1 Tipo de Investigación
+  "diseno_investigacion" for 2.1.2 Diseño de Investigación
+  "variables_def" for 2.1.3 Variables
+  "muestra" for 2.1.4 Muestra
+- Use these EXACT section_keys for methodology sections (empty source_ids):
+  "instrumentos_investigacion" for 2.1.5 Instrumentos de Investigación
+  "procedimiento_recoleccion" for 2.1.6 Procedimientos de Recolección de Datos
+- Use these EXACT section_keys for Chapter 3 placeholders (empty source_ids):
+  "resultados_placeholder" for 3.1.1 Presentación de Resultados
+  "discusion_placeholder" for 3.1.2 Discusión
+  "conclusiones_placeholder" for 3.1.3 Conclusiones
+  "recomendaciones_placeholder" for 3.1.4 Recomendaciones
 - Use this EXACT section_key for the consistency matrix:
   "matriz_consistencia" for Matriz de consistencia (placed in Anexos after References)
 - This section needs an empty source_ids array (generated formulaically from metadata)."""
@@ -256,6 +336,62 @@ Return ONLY the JSON array.
 """
 
     plans = call_claude_json(prompt, max_tokens=4096)
+
+    # --- Enforce canonical ordering ---
+    # Override LLM-assigned order_index with deterministic values
+    plans_by_key = {}
+    for plan in plans:
+        key = plan.get("section_key", "")
+        if key:
+            plans_by_key[key] = plan
+
+    # Inject any missing required USIL sections (empty source_ids, default title)
+    _DEFAULT_TITLES = {
+        "front_dedicatoria": "Dedicatoria",
+        "front_agradecimiento": "Agradecimiento",
+        "front_resumen": "Resumen",
+        "front_abstract": "Abstract",
+        "introduccion": "Introducción",
+        "planteamiento_problema": "Planteamiento del Problema",
+        "problem_formulation": "Formulación del Problema",
+        "justificacion": "Justificación de la Investigación",
+        "antecedentes_internacionales": "Antecedentes internacionales",
+        "antecedentes_nacionales": "Antecedentes nacionales",
+        "bases_teoricas_v1": "Bases teóricas — Variable 1",
+        "bases_teoricas_v2": "Bases teóricas — Variable 2",
+        "research_objectives": "Objetivos",
+        "hypothesis": "Hipótesis",
+        "tipo_investigacion": "Tipo de Investigación",
+        "diseno_investigacion": "Diseño de Investigación",
+        "variables_def": "Variables",
+        "muestra": "Muestra",
+        "instrumentos_investigacion": "Instrumentos de Investigación",
+        "procedimiento_recoleccion": "Procedimientos de Recolección de Datos",
+        "resultados_placeholder": "Presentación de Resultados",
+        "discusion_placeholder": "Discusión",
+        "conclusiones_placeholder": "Conclusiones",
+        "recomendaciones_placeholder": "Recomendaciones",
+        "references": "Referencias Bibliográficas",
+        "matriz_consistencia": "Matriz de consistencia",
+    }
+
+    if lang == "es":
+        for key in CANONICAL_ORDER:
+            if key not in plans_by_key:
+                plans_by_key[key] = {
+                    "section_key": key,
+                    "section_title": _DEFAULT_TITLES.get(key, key),
+                    "source_ids": [],
+                    "key_points": [],
+                }
+                print(f"    [AUTO] Injected missing section: {key}")
+
+    # Apply canonical order_index to all plans
+    for key, plan in plans_by_key.items():
+        plan["order_index"] = CANONICAL_ORDER.get(key, 999)
+
+    # Rebuild sorted plan list
+    plans = sorted(plans_by_key.values(), key=lambda p: p.get("order_index", 999))
 
     # Validate and store
     version = get_current_version(project_name)

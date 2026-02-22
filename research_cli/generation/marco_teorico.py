@@ -1,15 +1,17 @@
 """
-marco_teorico.py — Bases teóricas and definición de términos for USIL thesis.
+marco_teorico.py — Bases teóricas for USIL thesis (Marco Teórico, section 1.2.2).
 
-Generates Chapter II sections 2.2 and 2.3:
-  2.2.1 Bases teóricas — Variable 1 (conceptualization organized by dimension)
-  2.2.2 Bases teóricas — Variable 2 (same structure)
-  2.3   Definición de términos básicos (brief academic definitions)
+Generates:
+  1.2.2.1 Bases teóricas — Variable 1 (conceptualization organized by dimension)
+  1.2.2.2 Bases teóricas — Variable 2 (same structure)
 
-Each bases_teoricas section gets a single LLM call that produces structured
-prose per dimension, citing assigned sources.  Definición de términos extracts
-key terms from both variables and their dimensions and generates concise
-definitions with citations.
+Each bases_teoricas section gets a single LLM call that produces:
+  1. 8 conceptual definitions from different authors (~400 words)
+  2. Estado del Arte table (20 theories/models/approaches)
+  3. Theory selection paragraph (which theory adopted and why)
+  4. Dimension definitions (8 lines each with citations)
+
+Target: ~1500-2000 words per variable.
 """
 
 import json
@@ -22,7 +24,6 @@ from research_cli.generation.planner import _parse_meta_variable
 MARCO_TEORICO_SECTIONS = {
     "bases_teoricas_v1",
     "bases_teoricas_v2",
-    "definicion_terminos",
 }
 
 
@@ -126,12 +127,27 @@ Para cada dimensión:
 **Tema de investigación:** {topic}
 **Variable:** {var_name} ({var_label})
 
-**Estructura requerida:**
-1. Definición general de la variable (~200 palabras, con citas)
-2. Subsecciones por dimensión (~200 palabras cada una, con citas)
-3. Síntesis de la relación entre dimensiones (~100 palabras)
+**Estructura requerida (en este orden):**
 
+### 1. Definiciones conceptuales (~400 palabras)
+Presenta al menos 8 definiciones de "{var_name}" de diferentes autores, cada una en un párrafo breve (2-3 oraciones). Usa el formato:
+"Según [Autor] ([Año]), [variable] se define como..."
+Varía los verbos: define, conceptualiza, plantea, establece, señala, argumenta, propone, sostiene.
+
+### 2. Estado del Arte — Tabla de teorías/modelos
+Presenta una tabla markdown con al menos 15 teorías, modelos o enfoques relacionados con "{var_name}":
+| N° | Autor(es) | Año | Teoría/Modelo/Enfoque | Descripción breve |
+
+### 3. Teoría adoptada (~150 palabras)
+Selecciona la teoría o modelo que se adopta en esta investigación y justifica la elección explicando por qué es la más pertinente para estudiar "{var_name}" en el contexto del estudio.
+
+### 4. Definición de dimensiones
 {dim_instruction}
+
+Para cada dimensión escribe al menos 8 líneas de contenido (~200 palabras por dimensión):
+- Definición conceptual con 2-3 autores diferentes
+- Relevancia para la variable principal
+- Indicadores asociados según la literatura
 
 **Instrucciones de citación — usa estas cadenas EXACTAS:**
 {cite_instructions}
@@ -142,90 +158,18 @@ Para cada dimensión:
 
 **REGLAS:**
 1. Redacción formal académica en español, tercera persona.
-2. Extensión aproximada: 800 palabras.
+2. Extensión aproximada: 1500-2000 palabras.
 3. Usa SOLO las cadenas de citación listadas arriba. NO inventes citas.
 4. Toda afirmación fáctica debe tener una cita en línea.
 5. NO fabricar datos, estadísticas o hallazgos que no estén en las fuentes.
 6. Si las fuentes son insuficientes para un punto, escribe:
    "[Se requiere mayor investigación para establecer...]"
 7. Incluye el encabezado de la variable como heading markdown (##).
-8. Escribe párrafos sustantivos, no viñetas.
+8. Escribe párrafos sustantivos, no viñetas (excepto en la tabla).
 9. Para cada dimensión usa heading ### (o #### si hay muchas).
 """
 
-    result = call_claude(prompt, max_tokens=4096, temperature=0.3)
-    return result
-
-
-def _generate_definicion_terminos(
-    topic: str,
-    meta: dict,
-    sources: list[dict],
-    citation_map: dict[int, str],
-) -> str:
-    """Generate the 'Definición de términos básicos' section.
-
-    Extracts key terms from variables and dimensions, generates concise
-    academic definitions with citations.
-    """
-    v1 = _parse_meta_variable(meta.get("variable_1", ""))
-    v2 = _parse_meta_variable(meta.get("variable_2", ""))
-
-    # Collect terms: variable names + all dimensions
-    terms = []
-    v1_name = v1.get("name", "")
-    v2_name = v2.get("name", "")
-    if v1_name:
-        terms.append(v1_name)
-        terms.extend(v1.get("dimensions") or [])
-    if v2_name:
-        terms.append(v2_name)
-        terms.extend(v2.get("dimensions") or [])
-
-    if not terms:
-        return (
-            "## Definición de términos básicos\n\n"
-            "No se definieron variables para generar los términos básicos."
-        )
-
-    terms_list = "\n".join(f"  - {t}" for t in terms)
-
-    # Prepare source material (lighter budget — definitions are brief)
-    if sources:
-        sources_text, cite_instructions = _prepare_sources_text(
-            sources, "definicion_terminos", topic, citation_map,
-            max_total_tokens=3000,
-        )
-    else:
-        sources_text = "(Sin fuentes asignadas)"
-        cite_instructions = "(Sin instrucciones de citación)"
-
-    prompt = f"""Redacta la sección "Definición de términos básicos" de una tesis académica USIL.
-
-**Tema:** {topic}
-
-**Términos a definir:**
-{terms_list}
-
-**Instrucciones de citación:**
-{cite_instructions}
-
-**Material de las fuentes:**
-
-{sources_text}
-
-**REGLAS:**
-1. Para cada término, escribe una definición concisa (2-3 oraciones) en español formal académico.
-2. Cada definición debe incluir al menos una cita en línea de las fuentes proporcionadas.
-3. Si no hay fuente disponible para un término, proporciona una definición conceptual e indica
-   "[definición operacional propuesta por el investigador]".
-4. Formato: lista con el término en **negrita** seguido de su definición.
-5. Incluye el encabezado "## Definición de términos básicos".
-6. NO inventar citas ni referencias.
-7. Ordena los términos: primero las variables principales, luego sus dimensiones.
-"""
-
-    result = call_claude(prompt, max_tokens=2048, temperature=0.3)
+    result = call_claude(prompt, max_tokens=8192, temperature=0.3)
     return result
 
 
@@ -240,7 +184,7 @@ def generate_marco_teorico(
     sources: list[dict],
     citation_map: dict[int, str],
 ) -> str:
-    """Generate a marco teórico section (bases teóricas or definición de términos).
+    """Generate a marco teórico section (bases teóricas).
 
     Returns formatted markdown.
     """
@@ -248,7 +192,5 @@ def generate_marco_teorico(
         return _generate_bases_teoricas(
             section_key, topic, meta, sources, citation_map
         )
-    elif section_key == "definicion_terminos":
-        return _generate_definicion_terminos(topic, meta, sources, citation_map)
     else:
         return ""

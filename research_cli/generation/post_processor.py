@@ -51,14 +51,31 @@ def check_section_word_counts(project_name: str) -> list[str]:
     warnings = []
 
     from research_cli.generation.formulaic import is_formulaic
+    from research_cli.generation.front_matter import is_front_matter
+    from research_cli.generation.introduccion import is_introduccion
+    from research_cli.generation.planteamiento import is_planteamiento
+    from research_cli.generation.justificacion import is_justificacion
     from research_cli.generation.antecedentes import is_antecedentes
     from research_cli.generation.marco_teorico import is_marco_teorico
     from research_cli.generation.methodology import is_methodology_boilerplate
     from research_cli.generation.matriz import is_matriz
+    from research_cli.generation.placeholders import is_placeholder
 
     for section in sections:
         key = section.get("section_key", "")
-        if key == "references" or is_formulaic(key) or is_antecedentes(key) or is_marco_teorico(key) or is_methodology_boilerplate(key) or is_matriz(key):
+        if (
+            key == "references"
+            or is_formulaic(key)
+            or is_front_matter(key)
+            or is_introduccion(key)
+            or is_planteamiento(key)
+            or is_justificacion(key)
+            or is_antecedentes(key)
+            or is_marco_teorico(key)
+            or is_methodology_boilerplate(key)
+            or is_matriz(key)
+            or is_placeholder(key)
+        ):
             continue
         wc = section.get("word_count", 0)
         title = section.get("section_title", key)

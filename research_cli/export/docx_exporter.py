@@ -3,12 +3,14 @@ docx_exporter.py — Convert markdown thesis draft to USIL-formatted .docx.
 
 Formatting:
     - Font: Times New Roman, 12pt
-    - Line spacing: 1.5
+    - Line spacing: 2.0 (double spacing per USIL requirement)
+    - First-line indent: 1.27 cm (0.5 inch)
     - Margins: 2.54 cm (1 inch) all sides — USIL standard
     - Headings: Heading 1/2/3 mapped from markdown #/##/###
     - Tables: parsed from markdown pipe-delimited tables
     - Bold / italic: parsed from **bold** and *italic* markers
     - Section separators (---) are consumed silently
+    - TOC, table index, and figure index inserted after Abstract
 """
 
 import re
@@ -17,6 +19,8 @@ from docx import Document
 from docx.shared import Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
 
 
 # ---------------------------------------------------------------------------
@@ -25,7 +29,8 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 
 FONT_NAME = "Times New Roman"
 FONT_SIZE_PT = 12
-LINE_SPACING = 1.5
+LINE_SPACING = 2.0
+FIRST_LINE_INDENT_CM = 1.27
 MARGIN_CM = 2.54
 
 HEADING_SIZES = {1: 16, 2: 14, 3: 12}
@@ -47,6 +52,8 @@ def _setup_styles(doc: Document) -> None:
     pf.line_spacing = LINE_SPACING
     pf.space_after = Pt(0)
     pf.space_before = Pt(0)
+    pf.first_line_indent = Cm(FIRST_LINE_INDENT_CM)
+    pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
     # Heading styles
     for level in (1, 2, 3):
@@ -63,6 +70,7 @@ def _setup_styles(doc: Document) -> None:
             h_pf.space_after = Pt(6)
             h_pf.line_spacing_rule = WD_LINE_SPACING.MULTIPLE
             h_pf.line_spacing = LINE_SPACING
+            h_pf.first_line_indent = Cm(0)
 
 
 def _setup_margins(doc: Document) -> None:
@@ -72,6 +80,105 @@ def _setup_margins(doc: Document) -> None:
         section.bottom_margin = Cm(MARGIN_CM)
         section.left_margin = Cm(MARGIN_CM)
         section.right_margin = Cm(MARGIN_CM)
+
+
+# ---------------------------------------------------------------------------
+# TOC and index field codes
+# ---------------------------------------------------------------------------
+
+def _add_toc(doc: Document) -> None:
+    """Insert a Table of Contents field code (Word populates on open)."""
+    p = doc.add_paragraph()
+    p.paragraph_format.first_line_indent = Cm(0)
+    run = p.add_run()
+    fldChar1 = OxmlElement("w:fldChar")
+    fldChar1.set(qn("w:fldCharType"), "begin")
+    run._r.append(fldChar1)
+
+    run2 = p.add_run()
+    instrText = OxmlElement("w:instrText")
+    instrText.set(qn("xml:space"), "preserve")
+    instrText.text = ' TOC \\o "1-3" \\h \\z \\u '
+    run2._r.append(instrText)
+
+    run3 = p.add_run()
+    fldChar2 = OxmlElement("w:fldChar")
+    fldChar2.set(qn("w:fldCharType"), "separate")
+    run3._r.append(fldChar2)
+
+    run4 = p.add_run("[Actualizar tabla de contenido: clic derecho → Actualizar campo]")
+    run4.font.name = FONT_NAME
+    run4.font.size = Pt(FONT_SIZE_PT)
+    run4.font.color.rgb = RGBColor(128, 128, 128)
+
+    run5 = p.add_run()
+    fldChar3 = OxmlElement("w:fldChar")
+    fldChar3.set(qn("w:fldCharType"), "end")
+    run5._r.append(fldChar3)
+
+
+def _add_table_index(doc: Document) -> None:
+    """Insert an Index of Tables field code."""
+    heading = doc.add_heading("Índice de Tablas", level=1)
+    p = doc.add_paragraph()
+    p.paragraph_format.first_line_indent = Cm(0)
+    run = p.add_run()
+    fldChar1 = OxmlElement("w:fldChar")
+    fldChar1.set(qn("w:fldCharType"), "begin")
+    run._r.append(fldChar1)
+
+    run2 = p.add_run()
+    instrText = OxmlElement("w:instrText")
+    instrText.set(qn("xml:space"), "preserve")
+    instrText.text = ' TOC \\h \\z \\c "Tabla" '
+    run2._r.append(instrText)
+
+    run3 = p.add_run()
+    fldChar2 = OxmlElement("w:fldChar")
+    fldChar2.set(qn("w:fldCharType"), "separate")
+    run3._r.append(fldChar2)
+
+    run4 = p.add_run("[Actualizar índice de tablas]")
+    run4.font.name = FONT_NAME
+    run4.font.size = Pt(FONT_SIZE_PT)
+    run4.font.color.rgb = RGBColor(128, 128, 128)
+
+    run5 = p.add_run()
+    fldChar3 = OxmlElement("w:fldChar")
+    fldChar3.set(qn("w:fldCharType"), "end")
+    run5._r.append(fldChar3)
+
+
+def _add_figure_index(doc: Document) -> None:
+    """Insert an Index of Figures field code."""
+    heading = doc.add_heading("Índice de Figuras", level=1)
+    p = doc.add_paragraph()
+    p.paragraph_format.first_line_indent = Cm(0)
+    run = p.add_run()
+    fldChar1 = OxmlElement("w:fldChar")
+    fldChar1.set(qn("w:fldCharType"), "begin")
+    run._r.append(fldChar1)
+
+    run2 = p.add_run()
+    instrText = OxmlElement("w:instrText")
+    instrText.set(qn("xml:space"), "preserve")
+    instrText.text = ' TOC \\h \\z \\c "Figura" '
+    run2._r.append(instrText)
+
+    run3 = p.add_run()
+    fldChar2 = OxmlElement("w:fldChar")
+    fldChar2.set(qn("w:fldCharType"), "separate")
+    run3._r.append(fldChar2)
+
+    run4 = p.add_run("[Actualizar índice de figuras]")
+    run4.font.name = FONT_NAME
+    run4.font.size = Pt(FONT_SIZE_PT)
+    run4.font.color.rgb = RGBColor(128, 128, 128)
+
+    run5 = p.add_run()
+    fldChar3 = OxmlElement("w:fldChar")
+    fldChar3.set(qn("w:fldCharType"), "end")
+    run5._r.append(fldChar3)
 
 
 # ---------------------------------------------------------------------------
@@ -112,8 +219,10 @@ def _add_formatted_text(paragraph, text: str) -> None:
 
 
 def _add_paragraph(doc: Document, text: str) -> None:
-    """Add a paragraph with inline formatting applied."""
+    """Add a paragraph with inline formatting and first-line indent applied."""
     p = doc.add_paragraph()
+    p.paragraph_format.first_line_indent = Cm(FIRST_LINE_INDENT_CM)
+    p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
     _add_formatted_text(p, text)
     # Apply font to all runs
     for run in p.runs:
@@ -197,13 +306,14 @@ def _get_list_text(line: str) -> str:
 
 
 def _add_list_item(doc: Document, text: str, numbered: bool = False) -> None:
-    """Add a list item paragraph."""
+    """Add a list item paragraph (no first-line indent for lists)."""
     style = "List Number" if numbered else "List Bullet"
     # Fallback if style doesn't exist
     try:
         p = doc.add_paragraph(style=style)
     except KeyError:
         p = doc.add_paragraph()
+    p.paragraph_format.first_line_indent = Cm(0)
     _add_formatted_text(p, text)
     for run in p.runs:
         run.font.name = FONT_NAME
@@ -243,6 +353,7 @@ def markdown_to_docx(markdown_text: str, output_path: str) -> str:
 
     lines = markdown_text.split("\n")
     i = 0
+    toc_inserted = False
 
     while i < len(lines):
         line = lines[i]
@@ -262,6 +373,14 @@ def markdown_to_docx(markdown_text: str, output_path: str) -> str:
         heading = _parse_heading(line)
         if heading:
             level, text = heading
+
+            # Insert TOC + indices after Abstract, before Introducción
+            if not toc_inserted and text.lower().startswith("introduc"):
+                _add_toc(doc)
+                _add_table_index(doc)
+                _add_figure_index(doc)
+                toc_inserted = True
+
             doc.add_heading(text, level=level)
             i += 1
             continue

@@ -199,8 +199,21 @@ def _format_antecedent(
 
     cite = citation_map.get(sid, f"({author}, {year})")
 
+    # Select phrasing based on author count
+    raw_authors = source.get("authors", "")
+    try:
+        parsed = json.loads(raw_authors)
+        author_count = len(parsed) if isinstance(parsed, list) else 1
+    except (json.JSONDecodeError, TypeError):
+        author_count = 1
+
+    if author_count > 1:
+        intro_phrase = f"{author} ({year}) publicaron un artículo titulado"
+    else:
+        intro_phrase = f"{author} ({year}) en su investigación titulada"
+
     paragraph = (
-        f"{author} ({year}) en su investigación titulada \"{title}\", "
+        f"{intro_phrase} \"{title}\", "
         f"tuvo como objetivo {objective} "
         f"La investigación fue de enfoque {methodology} "
         f"Los resultados evidenciaron que {findings} "

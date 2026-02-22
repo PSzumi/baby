@@ -1,10 +1,9 @@
 """
-methodology.py — Boilerplate methodology sections for USIL thesis (Chapter III).
+methodology.py — Methodology sections for USIL thesis (Chapter 2).
 
-Generates sections 3.4, 3.5, and 3.6 which are NOT already handled by formulaic.py:
-  3.4 Técnicas e instrumentos de recolección de datos
-  3.5 Procedimiento de recolección de datos
-  3.6 Métodos de análisis de datos
+Generates:
+  2.1.5 Instrumentos de Investigación (was técnicas_instrumentos)
+  2.1.6 Procedimientos de Recolección de Datos (was procedimiento_recoleccion + metodos_analisis)
 
 These are heavily template-driven with variable interpolation from project
 metadata.  Each section makes a single LLM call to enrich the boilerplate
@@ -19,9 +18,8 @@ from research_cli.generation.planner import _parse_meta_variable, _parse_meta_me
 
 
 METHODOLOGY_SECTIONS = {
-    "tecnicas_instrumentos",
+    "instrumentos_investigacion",
     "procedimiento_recoleccion",
-    "metodos_analisis",
 }
 
 
@@ -92,10 +90,33 @@ def _build_variable_instrument_table(meta: dict) -> str:
     return "\n".join(lines)
 
 
+def _build_ficha_tecnica(var_data: dict, var_label: str, var_type: str) -> str:
+    """Build a ficha técnica (instrument spec sheet) table for a variable."""
+    var_name = var_data.get("name") or var_label
+    dims = var_data.get("dimensions") or []
+    dims_text = ", ".join(dims) if dims else "Por definir"
+
+    return f"""### Ficha técnica: {var_name}
+
+| Aspecto | Descripción |
+|---------|-------------|
+| Nombre del instrumento | Cuestionario de {var_name} |
+| Autor(es) | [Por definir] |
+| Año | [Por definir] |
+| Adaptación | [Por definir — si aplica] |
+| Objetivo | Medir el nivel de {var_name} en la muestra de estudio |
+| Tipo de instrumento | Cuestionario con escala Likert de 5 puntos |
+| Dimensiones | {dims_text} |
+| Número de ítems | [Por definir] |
+| Escala de medición | Ordinal (1=Totalmente en desacuerdo, 5=Totalmente de acuerdo) |
+| Tiempo de aplicación | 10-15 minutos aproximadamente |
+| Validez | Validez de contenido por juicio de expertos |
+| Confiabilidad | Alfa de Cronbach > 0.70 |"""
+
+
 def _select_statistical_test(meth: dict) -> dict:
     """Select appropriate statistical tests based on methodology metadata."""
     scope = meth.get("scope", "correlacional").lower()
-    mtype = meth.get("type", "cuantitativa").lower()
 
     if "correlacional" in scope:
         return {
@@ -117,7 +138,7 @@ def _select_statistical_test(meth: dict) -> dict:
             "normality_test": "prueba de Kolmogorov-Smirnov",
             "descriptive": "frecuencias, porcentajes, medias y desviaciones estándar",
         }
-    else:  # descriptivo or other
+    else:
         return {
             "test_name": "estadística descriptiva",
             "test_justification": (
@@ -133,13 +154,13 @@ def _select_statistical_test(meth: dict) -> dict:
 # Section generators
 # ---------------------------------------------------------------------------
 
-def _gen_tecnicas_instrumentos(
+def _gen_instrumentos_investigacion(
     topic: str,
     meta: dict,
     sources: list[dict],
     citation_map: dict[int, str],
 ) -> str:
-    """Generate section 3.4: Técnicas e instrumentos de recolección de datos."""
+    """Generate section 2.1.5: Instrumentos de Investigación."""
     v1 = _parse_meta_variable(meta.get("variable_1", ""))
     v2 = _parse_meta_variable(meta.get("variable_2", ""))
     v1_name = v1.get("name") or "Variable 1"
@@ -147,9 +168,10 @@ def _gen_tecnicas_instrumentos(
     population = meta.get("population", "la población estudiada")
 
     instrument_table = _build_variable_instrument_table(meta)
+    ficha_v1 = _build_ficha_tecnica(v1, "Variable 1", "independiente")
+    ficha_v2 = _build_ficha_tecnica(v2, "Variable 2", "dependiente")
 
-    # Template body
-    template = f"""## Técnicas e instrumentos de recolección de datos
+    template = f"""## Instrumentos de Investigación
 
 ### Técnica
 
@@ -172,6 +194,10 @@ Se diseñaron dos cuestionarios:
 
 {instrument_table}
 
+{ficha_v1}
+
+{ficha_v2}
+
 ### Validez y confiabilidad
 
 La **validez de contenido** del instrumento fue evaluada mediante el juicio de expertos, quienes verificaron la pertinencia, relevancia y claridad de cada ítem.
@@ -183,7 +209,7 @@ La **confiabilidad** del instrumento se determinó mediante el coeficiente **Alf
     # LLM call to fill definition placeholders with academic citations
     if sources:
         sources_text, cite_instructions = _prepare_sources_text(
-            sources, "tecnicas_instrumentos", topic, citation_map
+            sources, "instrumentos_investigacion", topic, citation_map
         )
         enrichment_context = f"""
 **Instrucciones de citación:**
@@ -193,7 +219,6 @@ La **confiabilidad** del instrumento se determinó mediante el coeficiente **Alf
 {sources_text}"""
     else:
         enrichment_context = ""
-        cite_instructions = ""
 
     prompt = f"""Genera tres párrafos breves en español académico formal para insertar en una sección de metodología de tesis USIL.
 
@@ -245,10 +270,19 @@ def _gen_procedimiento_recoleccion(
     sources: list[dict],
     citation_map: dict[int, str],
 ) -> str:
-    """Generate section 3.5: Procedimiento de recolección de datos."""
+    """Generate section 2.1.6: Procedimientos de Recolección de Datos.
+
+    Now includes statistical analysis methods (formerly metodos_analisis).
+    """
     population = meta.get("population", "la población estudiada")
     university = meta.get("university", "")
     location = meta.get("location", "")
+    meth = _parse_meta_methodology(meta.get("methodology", ""))
+    stats = _select_statistical_test(meth)
+    v1 = _parse_meta_variable(meta.get("variable_1", ""))
+    v2 = _parse_meta_variable(meta.get("variable_2", ""))
+    v1_name = v1.get("name") or "Variable 1"
+    v2_name = v2.get("name") or "Variable 2"
 
     institution_ref = ""
     if university:
@@ -256,7 +290,7 @@ def _gen_procedimiento_recoleccion(
     elif location:
         institution_ref = f" en {location}"
 
-    template = f"""## Procedimiento de recolección de datos
+    template = f"""## Procedimientos de Recolección de Datos
 
 El procedimiento de recolección de datos se realizó siguiendo las etapas que se describen a continuación:
 
@@ -270,9 +304,29 @@ El procedimiento de recolección de datos se realizó siguiendo las etapas que s
 
 5. **Tabulación de datos**: Los datos recolectados fueron tabulados y organizados en una base de datos utilizando el programa Microsoft Excel para su posterior análisis estadístico.
 
-{{definition_etica}}"""
+{{definition_etica}}
 
-    # LLM call for ethical considerations definition
+### Métodos de análisis de datos
+
+El análisis de los datos recolectados se realizó utilizando el programa estadístico **SPSS** (Statistical Package for the Social Sciences) versión 26.
+
+#### Estadística descriptiva
+
+Para el análisis descriptivo de los datos se utilizaron {stats['descriptive']}, lo cual permitió caracterizar el comportamiento de las variables {v1_name} y {v2_name} y sus respectivas dimensiones.
+
+#### Estadística inferencial
+
+Para la contrastación de las hipótesis de investigación se empleó el **{stats['test_name']}**, {stats['test_justification']}.
+
+Previamente, se aplicó la **{stats['normality_test']}** para determinar la distribución de los datos y seleccionar la prueba estadística más adecuada.
+
+Se consideró un nivel de significancia de **α = 0.05** para la toma de decisiones estadísticas. El criterio de decisión fue:
+- Si p-valor < 0.05: se rechaza la hipótesis nula (H₀).
+- Si p-valor ≥ 0.05: no se rechaza la hipótesis nula (H₀).
+
+{{definition_test}}"""
+
+    # LLM calls for ethics paragraph and test definition
     if sources:
         sources_text, cite_instructions = _prepare_sources_text(
             sources, "procedimiento_recoleccion", topic, citation_map
@@ -286,97 +340,41 @@ El procedimiento de recolección de datos se realizó siguiendo las etapas que s
     else:
         enrichment_context = ""
 
-    prompt = f"""Genera un párrafo breve en español académico formal sobre las consideraciones éticas en la recolección de datos para una tesis USIL.
+    prompt = f"""Genera dos párrafos breves en español académico formal para insertar en una sección de metodología de tesis USIL.
 
-El párrafo debe mencionar:
-- El respeto a la autonomía de los participantes
-- La confidencialidad y anonimato de los datos
-- El cumplimiento de principios éticos de investigación
+1. **definition_etica**: Consideraciones éticas en la recolección de datos (3-4 oraciones). Menciona respeto a la autonomía, confidencialidad/anonimato, y principios éticos.
+
+2. **definition_test**: Define el {stats['test_name']} y justifica su uso en una investigación {meth.get('type', 'cuantitativa')} de alcance {meth.get('scope', 'correlacional')} (2-3 oraciones).
 {enrichment_context}
 
 REGLAS:
-- 3-4 oraciones en tercera persona.
+- Escribe en tercera persona, español formal académico.
 - Si hay fuentes disponibles, cita las cadenas proporcionadas.
-- Si no, usa una referencia general como (Noreña et al., 2012) para principios éticos.
+- Si no, usa referencias generales como (Hernández-Sampieri et al., 2014) o (Noreña et al., 2012).
 
-Devuelve SOLO el párrafo, sin encabezados.
+Devuelve EXACTAMENTE en este formato:
+DEFINITION_ETICA:
+[texto]
+
+DEFINITION_TEST:
+[texto]
 """
 
     try:
-        llm_output = call_claude(prompt, max_tokens=500, temperature=0.2)
-        ethics_paragraph = llm_output.strip()
+        llm_output = call_claude(prompt, max_tokens=1000, temperature=0.2)
+        definitions = _parse_definitions_v2(llm_output)
     except Exception:
-        ethics_paragraph = ""
+        definitions = {}
 
-    return template.replace("{definition_etica}", ethics_paragraph)
+    result = template.replace(
+        "{definition_etica}",
+        definitions.get("definition_etica", "")
+    ).replace(
+        "{definition_test}",
+        definitions.get("definition_test", "")
+    )
 
-
-def _gen_metodos_analisis(
-    topic: str,
-    meta: dict,
-    sources: list[dict],
-    citation_map: dict[int, str],
-) -> str:
-    """Generate section 3.6: Métodos de análisis de datos."""
-    meth = _parse_meta_methodology(meta.get("methodology", ""))
-    stats = _select_statistical_test(meth)
-    v1 = _parse_meta_variable(meta.get("variable_1", ""))
-    v2 = _parse_meta_variable(meta.get("variable_2", ""))
-    v1_name = v1.get("name") or "Variable 1"
-    v2_name = v2.get("name") or "Variable 2"
-
-    template = f"""## Métodos de análisis de datos
-
-El análisis de los datos recolectados se realizó utilizando el programa estadístico **SPSS** (Statistical Package for the Social Sciences) versión 26.
-
-### Estadística descriptiva
-
-Para el análisis descriptivo de los datos se utilizaron {stats['descriptive']}, lo cual permitió caracterizar el comportamiento de las variables {v1_name} y {v2_name} y sus respectivas dimensiones.
-
-### Estadística inferencial
-
-Para la contrastación de las hipótesis de investigación se empleó el **{stats['test_name']}**, {stats['test_justification']}.
-
-Previamente, se aplicó la **{stats['normality_test']}** para determinar la distribución de los datos y seleccionar la prueba estadística más adecuada.
-
-Se consideró un nivel de significancia de **α = 0.05** para la toma de decisiones estadísticas. El criterio de decisión fue:
-- Si p-valor < 0.05: se rechaza la hipótesis nula (H₀).
-- Si p-valor ≥ 0.05: no se rechaza la hipótesis nula (H₀).
-
-{{definition_test}}"""
-
-    # LLM call for test definition
-    if sources:
-        sources_text, cite_instructions = _prepare_sources_text(
-            sources, "metodos_analisis", topic, citation_map
-        )
-        enrichment_context = f"""
-**Instrucciones de citación:**
-{cite_instructions}
-
-**Fuentes disponibles:**
-{sources_text}"""
-    else:
-        enrichment_context = ""
-
-    prompt = f"""Genera un párrafo breve en español académico formal que defina el {stats['test_name']} y justifique su uso en una investigación {meth.get('type', 'cuantitativa')} de alcance {meth.get('scope', 'correlacional')}.
-{enrichment_context}
-
-REGLAS:
-- 2-3 oraciones en tercera persona.
-- Si hay fuentes disponibles, cita las cadenas proporcionadas.
-- Si no, usa una referencia general como (Hernández-Sampieri et al., 2014).
-
-Devuelve SOLO el párrafo, sin encabezados.
-"""
-
-    try:
-        llm_output = call_claude(prompt, max_tokens=500, temperature=0.2)
-        test_paragraph = llm_output.strip()
-    except Exception:
-        test_paragraph = ""
-
-    return template.replace("{definition_test}", test_paragraph)
+    return result
 
 
 def _parse_definitions(llm_output: str) -> dict:
@@ -392,7 +390,6 @@ def _parse_definitions(llm_output: str) -> dict:
                 definitions[current_key] = "\n".join(current_lines).strip()
             current_key = "definition_encuesta"
             current_lines = []
-            # Check if content is on the same line after ':'
             after_colon = line.split(":", 1)[1].strip() if ":" in line else ""
             if after_colon:
                 current_lines.append(after_colon)
@@ -422,6 +419,40 @@ def _parse_definitions(llm_output: str) -> dict:
     return definitions
 
 
+def _parse_definitions_v2(llm_output: str) -> dict:
+    """Parse labeled definition blocks (etica + test) from LLM output."""
+    definitions = {}
+    current_key = None
+    current_lines = []
+
+    for line in llm_output.split("\n"):
+        upper = line.strip().upper()
+        if upper.startswith("DEFINITION_ETICA"):
+            if current_key:
+                definitions[current_key] = "\n".join(current_lines).strip()
+            current_key = "definition_etica"
+            current_lines = []
+            after_colon = line.split(":", 1)[1].strip() if ":" in line else ""
+            if after_colon:
+                current_lines.append(after_colon)
+        elif upper.startswith("DEFINITION_TEST"):
+            if current_key:
+                definitions[current_key] = "\n".join(current_lines).strip()
+            current_key = "definition_test"
+            current_lines = []
+            after_colon = line.split(":", 1)[1].strip() if ":" in line else ""
+            if after_colon:
+                current_lines.append(after_colon)
+        else:
+            if current_key and line.strip():
+                current_lines.append(line.strip())
+
+    if current_key:
+        definitions[current_key] = "\n".join(current_lines).strip()
+
+    return definitions
+
+
 # ---------------------------------------------------------------------------
 # Public dispatcher
 # ---------------------------------------------------------------------------
@@ -437,11 +468,9 @@ def generate_methodology(
 
     Returns formatted markdown.
     """
-    if section_key == "tecnicas_instrumentos":
-        return _gen_tecnicas_instrumentos(topic, meta, sources, citation_map)
+    if section_key == "instrumentos_investigacion":
+        return _gen_instrumentos_investigacion(topic, meta, sources, citation_map)
     elif section_key == "procedimiento_recoleccion":
         return _gen_procedimiento_recoleccion(topic, meta, sources, citation_map)
-    elif section_key == "metodos_analisis":
-        return _gen_metodos_analisis(topic, meta, sources, citation_map)
     else:
         return ""
