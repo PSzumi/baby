@@ -1,95 +1,183 @@
-# research-cli v2
+# research-cli
 
-Automated academic thesis generation from real research data. Fetches papers from 5 scholarly APIs, downloads open-access PDFs, builds a verified citation database, and generates a thesis section-by-section with programmatically accurate references.
+Automated USIL academic thesis generation from real research data. Fetches papers from 9 scholarly databases, builds a verified citation database, and generates a complete thesis with proper 3-chapter USIL structure and DOCX export.
 
-## Quick Start
+---
+
+## Setup Instructions (Windows)
+
+### Step 1: Install Python
+
+1. Go to https://www.python.org/downloads/
+2. Download **Python 3.12** (or any 3.10+)
+3. Run the installer — **check the box "Add Python to PATH"** at the bottom
+4. Click "Install Now"
+
+### Step 2: Download the project
+
+1. Open **Command Prompt** (press `Win + R`, type `cmd`, press Enter)
+2. Navigate to where you want the project (e.g. your Desktop):
+   ```
+   cd %USERPROFILE%\Desktop
+   ```
+3. Clone the repo:
+   ```
+   git clone https://github.com/PSzumi/baby.git
+   cd baby
+   ```
+
+> If `git` is not installed: download it from https://git-scm.com/download/win and install it (all defaults are fine), then reopen Command Prompt.
+
+### Step 3: Create virtual environment and install
+
+```
+python -m venv .venv
+.venv\Scripts\activate
+pip install -e .
+```
+
+After this you should see `(.venv)` at the start of your command line.
+
+### Step 4: Get a Gemini API key (free)
+
+1. Go to https://aistudio.google.com/apikey
+2. Sign in with a Google account
+3. Click **"Create API Key"**
+4. Copy the key
+
+### Step 5: Create the .env file
+
+In the `baby` folder, create a file called `.env`. The easiest way:
+
+```
+notepad .env
+```
+
+Paste this content and fill in your key:
+
+```
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=paste-your-key-here
+UNPAYWALL_EMAIL=your.email@gmail.com
+CROSSREF_MAILTO=your.email@gmail.com
+```
+
+Save and close Notepad.
+
+### Step 6: Run it
+
+Make sure the virtual environment is activated (`(.venv)` shows in your prompt). If not:
+```
+.venv\Scripts\activate
+```
+
+Then run each command one at a time, waiting for each to finish:
+
+```
+research-cli init myproject --lang es --location "Lima, Perú" --university "USIL" --var1 "Estrés laboral" --var2 "Satisfacción laboral" --population "trabajadores de una empresa privada" --sample-size 120
+
+research-cli fetch-data myproject --email your.email@gmail.com
+
+research-cli review myproject --auto
+
+research-cli scaffold myproject
+
+research-cli draft myproject
+
+research-cli export myproject
+```
+
+The final thesis will be at: `projects\myproject\outputs\v1\thesis.docx`
+
+### Every time you open a new Command Prompt
+
+You need to activate the virtual environment first:
+```
+cd %USERPROFILE%\Desktop\baby
+.venv\Scripts\activate
+```
+
+---
+
+## Setup Instructions (Linux / macOS)
 
 ```bash
-# 1. Install
+git clone https://github.com/PSzumi/baby.git
+cd baby
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
-
-# 2. Configure
 cp .env.example .env
-# Edit .env: set ANTHROPIC_API_KEY and UNPAYWALL_EMAIL
-
-# 3. Run the workflow
-research-cli init my-thesis --context "environmental science" --location "Southeast Asia"
-research-cli fetch-data my-thesis --email your@email.edu
-research-cli review my-thesis
-research-cli scaffold my-thesis
-research-cli draft my-thesis
-research-cli present my-thesis
-
-# Check status anytime
-research-cli status my-thesis
-
-# After colleague feedback
-research-cli revise my-thesis --feedback feedback.txt
-research-cli revise my-thesis --feedback feedback.txt --apply  # auto-apply revisions
+# Edit .env: set GEMINI_API_KEY and UNPAYWALL_EMAIL
 ```
 
-## Workflow
+---
 
-| Phase | Command | What It Does |
-|-------|---------|-------------|
-| 1 | `init` | Create project, generate topic suggestions, pick one |
-| 2 | `fetch-data` | Search Semantic Scholar + OpenAlex, deduplicate, enrich via CrossRef, download OA PDFs, score relevance |
-| 2.5 | `review` | Interactive table to include/exclude sources, check coverage gaps |
-| 3 | `scaffold` | Claude plans sections + maps sources to each, generates outline |
-| 4 | `draft` | Write each section independently with assigned sources, validate citations, generate references programmatically |
-| 5 | `present` | Executive summary, slide deck outline, Q&A defense guide |
-| 6 | `revise` | Parse feedback, gap analysis, surgical rewrites, new version |
+## Customizing your thesis
 
-## Data Sources
+Change the `init` command variables to match your thesis topic:
 
-| API | Purpose | What It Provides |
-|-----|---------|-----------------|
-| Semantic Scholar | Discovery | Papers, abstracts, citations, TLDR, OA PDF links |
-| OpenAlex | Discovery | Papers, abstracts, OA indicators, institution data |
-| CrossRef | Enrichment | Full bibliographic metadata (journal, volume, pages, DOI) |
-| Unpaywall | Full text | Open-access PDF links for any DOI |
-| arXiv | Full text | Direct PDF downloads for preprints |
+| Flag | What it does |
+|------|-------------|
+| `--var1` | Independent variable name |
+| `--var2` | Dependent variable name |
+| `--population` | Who you are studying |
+| `--sample-size` | Number of participants |
+| `--location` | Geographic focus (used in Planteamiento del Problema) |
+| `--university` | University name |
+| `--lang es` | Spanish (use `en` for English) |
+| `--career` | Career / academic program |
 
-## Key Design Decisions
+---
 
-- **Citations are NEVER generated by the LLM.** The References section is built programmatically from CrossRef metadata stored in a BibTeX database.
-- **Section-by-section generation.** Each section gets only its relevant sources (3-8), not all 30+. Claude focuses on one section at a time with full context budget.
-- **Full-text where available.** Papers with downloadable PDFs are extracted and fed as full text. Abstract-only papers still work but are weighted lower.
-- **Versioned outputs.** Each revision creates a new version directory (`v1/`, `v2/`, ...).
+## Available commands
 
-## Project Structure
+| Command | What it does |
+|---------|-------------|
+| `init` | Create project, set topic and variables |
+| `fetch-data` | Search 9 academic databases for sources |
+| `review` | Curate sources (use `--auto` to include all) |
+| `scaffold` | Plan sections and assign sources |
+| `draft` | Generate full thesis text section by section |
+| `export` | Convert to USIL-formatted .docx |
+| `present` | Generate presentation guide and Q&A |
+| `revise` | Apply feedback to revise sections |
+| `status` | Show project state |
 
-```
-projects/my-thesis/
-├── state.db                          # SQLite (7 tables)
-├── sources/
-│   ├── compiled_sources.txt          # Human-readable source listing
-│   ├── bibliography.bib              # BibTeX database
-│   ├── pdfs/                         # Downloaded PDFs
-│   └── fulltext/                     # Extracted text from PDFs
-└── outputs/
-    ├── v1/
-    │   ├── scaffold.md               # Section plan + outline
-    │   ├── final_draft.md            # Complete thesis with references
-    │   ├── presentation_guide.md     # Exec summary + slides + Q&A
-    │   └── revision_plan.md          # Feedback analysis
-    └── v2/                           # After revision
-        └── ...
-```
+---
 
-## Code Layout
+## USIL thesis structure (26 sections)
 
 ```
-research_cli/
-├── main.py                # CLI (8 commands)
-├── config.py              # API keys, rate limits, model config
-├── database.py            # SQLite (7 tables)
-├── llm_client.py          # Anthropic SDK (text, JSON, streaming)
-├── sources/               # 5 API clients
-├── content/               # PDF extraction, dedup, scoring, summarization
-├── citations/             # BibTeX DB, APA formatting, validation
-├── generation/            # Section planning, writing, post-processing
-├── revision/              # Feedback parsing, gap analysis, surgical editing
-└── commands/              # 7 CLI command implementations
+Dedicatoria / Agradecimiento / Resumen / Abstract
+Introducción
+Capítulo 1
+  1.1. Problema de Investigación
+    1.1.1. Planteamiento del Problema
+    1.1.2. Formulación del Problema
+    1.1.3. Justificación de la Investigación
+  1.2. Marco Referencial
+    1.2.1. Antecedentes (internacionales + nacionales)
+    1.2.2. Marco Teórico (Variable 1 + Variable 2)
+  1.3. Objetivos e Hipótesis
+Capítulo 2
+  2.1. Método
+    2.1.1–2.1.6. Tipo, Diseño, Variables, Muestra, Instrumentos, Procedimiento
+Capítulo 3
+  3.1. Resultados, Discusión, Conclusiones, Recomendaciones
+Referencias Bibliográficas
+Anexos (Matriz de consistencia)
 ```
+
+---
+
+## Troubleshooting
+
+**"python is not recognized"** — Python wasn't added to PATH. Reinstall and check the "Add to PATH" box.
+
+**"git is not recognized"** — Install git from https://git-scm.com/download/win and reopen Command Prompt.
+
+**"No module named research_cli"** — Make sure you ran `pip install -e .` with the virtual environment activated.
+
+**API rate limits / 429 errors** — The tool pauses between API calls automatically. If you still get errors, wait a few minutes and run the command again (it resumes where it left off).
+
+**DOCX looks wrong** — Open the .docx in Word, right-click the Table of Contents and click "Update Field" to populate it.
