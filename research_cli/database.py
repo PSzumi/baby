@@ -305,6 +305,9 @@ def upsert_source(project_name: str, source: dict) -> int:
         ):
             val = source.get(field)
             if val:
+                # Serialize lists (e.g. authors) to JSON for SQLite
+                if isinstance(val, list):
+                    val = json.dumps(val)
                 updates.append(f"{field} = ?")
                 params.append(val)
         # Numeric fields: update if non-zero
