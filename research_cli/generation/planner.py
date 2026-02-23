@@ -337,6 +337,17 @@ Return ONLY the JSON array.
 
     plans = call_claude_json(prompt, max_tokens=4096)
 
+    # Unwrap dict wrapper if LLM returns {"sections": [...]} instead of bare list
+    if isinstance(plans, dict):
+        for v in plans.values():
+            if isinstance(v, list):
+                plans = v
+                break
+        else:
+            plans = []
+    if not isinstance(plans, list):
+        plans = []
+
     # --- Enforce canonical ordering ---
     # Override LLM-assigned order_index with deterministic values
     plans_by_key = {}
