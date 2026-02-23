@@ -53,14 +53,23 @@ In the `baby` folder, create a file called `.env`. The easiest way:
 notepad .env
 ```
 
-Paste this content and fill in your key:
+Paste this content and fill in your keys:
 
 ```
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=paste-your-key-here
 UNPAYWALL_EMAIL=your.email@gmail.com
 CROSSREF_MAILTO=your.email@gmail.com
+SEMANTIC_SCHOLAR_API_KEY=paste-key-here
+CORE_API_KEY=paste-key-here
+SCOPUS_API_KEY=paste-key-here
 ```
+
+**Where to get the API keys (all free):**
+- **Gemini**: https://aistudio.google.com/apikey (sign in with Google)
+- **Semantic Scholar**: https://www.semanticscholar.org/product/api (click "Request API Key")
+- **CORE**: https://core.ac.uk/services/api (enter email, key sent instantly)
+- **Scopus**: https://dev.elsevier.com (create account → "Create API Key")
 
 Save and close Notepad.
 
