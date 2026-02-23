@@ -32,13 +32,16 @@ def search(query: str, limit: int = 30, year_range: str = "") -> list[dict]:
         origin, doi, title, authors, year, journal, url, pdf_url,
         abstract, citation_count, is_open_access, tldr
     """
+    if not SEMANTIC_SCHOLAR_API_KEY:
+        print("  [SKIP] Semantic Scholar: no API key set (set SEMANTIC_SCHOLAR_API_KEY)")
+        return []
+
     if not year_range:
         current_year = datetime.now().year
         year_range = f"{current_year - 5}-{current_year}"
 
     headers = {"User-Agent": USER_AGENT}
-    if SEMANTIC_SCHOLAR_API_KEY:
-        headers["x-api-key"] = SEMANTIC_SCHOLAR_API_KEY
+    headers["x-api-key"] = SEMANTIC_SCHOLAR_API_KEY
 
     results = []
     offset = 0
